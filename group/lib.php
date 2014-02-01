@@ -709,11 +709,11 @@ function groups_get_possible_roles($context) {
  *
  * @param int $courseid The id of the course
  * @param int $roleid The role to select users from
- * @param int $cohortid restrict to cohort id
+ * @param int $source Where to source the users from (course, enrolment, group)
  * @param string $orderby The column to sort users by
  * @return array An array of the users
  */
-function groups_get_potential_members($courseid, $roleid = null, $cohortid = null, $orderby = 'lastname ASC, firstname ASC') {
+function groups_get_potential_members($courseid, $roleid = null, $source = 'course', $orderby = 'lastname ASC, firstname ASC') {
     global $DB;
 
     $context = context_course::instance($courseid);
@@ -732,18 +732,23 @@ function groups_get_potential_members($courseid, $roleid = null, $cohortid = nul
         $where = "";
     }
 
-    if ($cohortid) {
-        $cohortjoin = "JOIN {cohort_members} cm ON (cm.userid = u.id AND cm.cohortid = :cohortid)";
-        $params['cohortid'] = $cohortid;
-    } else {
-        $cohortjoin = "";
+    $sourcejoin = "";
+    if ($source != "course") {
+        list ($sourcetype,$sourceid) = explode(':',$source);
+        if ($sourcetype == 'enrol') {
+            $sourcejoin = "JOIN {user_enrolments} ue ON (ue.userid = u.id AND ue.enrolid = :enrolid)";
+            $params['enrolid']=$sourceid;
+        } else if ($sourcetype == "group") {
+            $sourcejoin = "JOIN {groups_members} gm ON (gm.userid = u.id AND gm.groupid = :groupid)";
+            $params['groupid'] = $sourceid;
+        }
     }
 
     $allusernamefields = get_all_user_name_fields(true, 'u');
     $sql = "SELECT u.id, u.username, $allusernamefields, u.idnumber
               FROM {user} u
               JOIN ($esql) e ON e.id = u.id
-       $cohortjoin
+       $sourcejoin
             $where
           ORDER BY $orderby";
 

@@ -28,6 +28,7 @@ if (!defined('MOODLE_INTERNAL')) {
 
 require_once($CFG->dirroot.'/lib/formslib.php');
 require_once($CFG->dirroot.'/cohort/lib.php');
+require_once($CFG->dirroot.'/lib/enrollib.php');
 
 /**
  * Auto group form class
@@ -42,7 +43,7 @@ class autogroup_form extends moodleform {
      * Form Definition
      */
     function definition() {
-        global $CFG, $COURSE;
+        global $DB, $CFG, $COURSE;
 
         $mform =& $this->_form;
 
@@ -82,23 +83,43 @@ class autogroup_form extends moodleform {
             $mform->setDefault('roleid', $student->id);
         }
 
-        $context = context_course::instance($COURSE->id);
-        if (has_capability('moodle/cohort:view', $context)) {
-            $options = cohort_get_visible_list($COURSE);
-            if ($options) {
-                $options = array(0=>get_string('anycohort', 'cohort')) + $options;
-                $mform->addElement('select', 'cohortid', get_string('selectfromcohort', 'cohort'), $options);
-                $mform->setDefault('cohortid', '0');
-            } else {
-                $mform->addElement('hidden','cohortid');
-                $mform->setType('cohortid', PARAM_INT);
-                $mform->setConstant('cohortid', '0');
+        $options= array();
+        $options['All Users'] = array('course' => get_string('allparticipants'));
+
+        $instances = enrol_get_instances($COURSE->id, true);
+        $subgroup = array();
+        foreach ($instances as $e) {
+            $lib = $CFG->dirroot . '/enrol/' . $e->enrol . '/lib.php';
+            $class = 'enrol_' . $e->enrol . '_plugin';
+            if (file_exists($lib)) {
+                require_once($lib);
+                $i = new $class();
+                $count = $DB->count_records('user_enrolments', array('enrolid'=>$e->id));
+                //only include enrolments with members
+                if ($count > 0) $subgroup['enrol:' . $e->id] = $i->get_instance_name($e) . " [$count]";
             }
-        } else {
-            $mform->addElement('hidden','cohortid');
-            $mform->setType('cohortid', PARAM_INT);
-            $mform->setConstant('cohortid', '0');
         }
+
+        if (!empty($subgroup)) $options[get_string('enrolmentmethods')] = $subgroup;
+
+        //Groups
+        $groups = groups_get_all_groups($COURSE->id);
+        $subgroup = array();
+        foreach ($groups as $g) {
+            $count = $DB->count_records('groups_members', array('groupid'=>$g->id));
+            //only include groups with members
+            if ($count > 0) $subgroup['group:' . $g->id] = $g->name . " [$count]";
+        }
+        if (!empty($subgroup)) $options[get_string('groups')] = $subgroup;
+
+        if (count($options) > 1) {
+            $mform->addElement('selectgroups', 'source', get_string('selectmembersfrom','group'), $options);
+        } else {
+            $mform->addElement('hidden','source');
+            $mform->setType('source', PARAM_TEXT);
+            $mform->setConstant('source', 'course');
+        }
+
         $options = array('no'        => get_string('noallocation', 'group'),
                          'random'    => get_string('random', 'group'),
                          'firstname' => get_string('byfirstname', 'group'),
@@ -154,7 +175,7 @@ class autogroup_form extends moodleform {
         $errors = parent::validation($data, $files);
 
         if ($data['allocateby'] != 'no') {
-            if (!$users = groups_get_potential_members($data['courseid'], $data['roleid'], $data['cohortid'])) {
+            if (!$users = groups_get_potential_members($data['courseid'], $data['roleid'], $data['source'])) {
                 $errors['roleid'] = get_string('nousersinrole', 'group');
             }
 

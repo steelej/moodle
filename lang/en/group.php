@@ -173,6 +173,7 @@ $string['removegroupingsmembers'] = 'Remove all groups from groupings';
 $string['removegroupsmembers'] = 'Remove all group members';
 $string['removeselectedusers'] = 'Remove selected users';
 $string['selectfromrole'] = 'Select members with role';
+$string['selectmembersfrom'] = 'Select members from...';
 $string['showgroupsingrouping'] = 'Show groups in grouping';
 $string['showmembersforgroup'] = 'Show members for group';
 $string['toomanygroups'] = 'Insufficient users to populate this number of groups - there are only {$a} users in the selected role.';
